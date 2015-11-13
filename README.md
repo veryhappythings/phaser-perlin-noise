@@ -12,7 +12,7 @@ implementation seems slower. I prefer the noise generated from the other
 algorithms, so I haven't developed this further, but I'm sure it could get
 faster with a bit of work.
 
-I am endebted to gdcbyers for [Noisy](http://mrl.nyu.edu/~perlin/noise/) and
+I am endebted to gdcbyers for [Noisy](https://github.com/gdcbyers/noisy/) and
 Adrian Biagioli for [this excellent blog post](http://flafla2.github.io/2014/08/09/perlinnoise.html)
 that helped me piece all this together.
 
