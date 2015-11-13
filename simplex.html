@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<title>Perlin noise</title>
+	<script type="text/javascript" src="js/phaser.min.js"></script>
+    <style type="text/css">
+        body {
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+
+<script type="text/javascript">
+
+var game = new Phaser.Game(800, 600, Phaser.AUTO, '', { preload: preload, create: create, update: update, render: render });
+
+function preload() {
+}
+
+function create() {
+  textureSize = 600;
+  gridSize = 3;
+  indent = 10;
+  distance = 2;
+  step = textureSize / gridSize;
+  var rng = new Phaser.RandomDataGenerator([1]);
+  var dustChance = new Phaser.RandomDataGenerator([2]);
+  var randomGrid = new Array();
+  for (var i = 0; i < gridSize + 1; i++) {
+    randomGrid.push(new Array());
+    for (var j = 0; j < gridSize + 1; j++) {
+      randomGrid[i].push([rng.realInRange(-1, 1), rng.realInRange(-1, 1)]);
+    }
+  }
+
+  bmd = game.add.bitmapData(textureSize, textureSize);
+  noise = new Noise(0.00000000000001, 4);
+
+  var pixelColours = {};
+  for (var y = 1; y < textureSize+1; y+=distance) {
+    pixelColours[y] = {};
+    for (var x = 1; x < textureSize+1; x+=distance) {
+      pixelColours[y][x] = noise.perlin_noise_2d(x / step, y / step);
+    }
+  }
+
+  for (var y = 1; y < textureSize+1; y+=distance) {
+    for (var x = 1; x < textureSize+1; x+=distance) {
+      var p = pixelColours[y][x];
+      var grey = 255 * p;
+      bmd.setPixel(x, y, grey, grey, grey, false);
+    }
+  }
+
+  // Force image update
+  bmd.context.putImageData(bmd.imageData, 0, 0);
+  bmd.dirty = true;
+  game.cache.addBitmapData('perlin', bmd);
+  game.add.sprite(indent, indent, game.cache.getBitmapData('perlin'));
+
+  console.log('done');
+}
+
+function update() {
+}
+
+function render() {
+}
+
+//https://github.com/gdcbyers/noisy/blob/master/lib/noisy/noisy.rb
+Noise = function(seed, octaves) {
+  this.seed = seed;
+  this.octaves = octaves;
+  this.persistence = 0.25;
+  this.cache = {};
+}
+
+Noise.prototype.raw_noise = function(x) {
+  var xi = Math.floor(x);
+  var n = (xi << 13) ^ xi;
+  return (1.0 - ((n * (n * n * 15731 * this.seed + 789221 * this.seed) + 1376312589 * this.seed) & 0x7fffffff) / 1073741824.0);
+}
+
+Noise.prototype.raw_noise_2d = function(x, y) {
+  if (this.cache[x+','+y] != undefined) {
+    return this.cache[x+','+y];
+  }
+  var n = Math.floor(x + y * 57);
+  n = (n << 13) ^ n;
+  var result = (1.0 - ((n * (n * n * 15731 * this.seed + 789221 * this.seed) + 1376312589 * this.seed) & 0x7fffffff) / 1073741824.0);
+  this.cache[x+','+y] = result;
+  return result;
+}
+
+Noise.prototype.smooth_noise = function(x) {
+  var left = this.raw_noise(x - 1.0);
+  var right = this.raw_noise(x + 1.0);
+  return this.raw_noise(x) / 2 + left / 4 + right / 4;
+}
+
+Noise.prototype.smooth_noise_2d = function(x, y) {
+  var corners = this.raw_noise_2d(x - 1, y - 1) + this.raw_noise_2d(x - 1, y + 1) + this.raw_noise_2d(x + 1, y - 1) + this.raw_noise_2d(x + 1, y + 1);
+  var sides = this.raw_noise_2d(x, y - 1) + this.raw_noise_2d(x, y + 1) + this.raw_noise_2d(x - 1, y) + this.raw_noise_2d(x + 1, y);
+  var center = this.raw_noise_2d(x, y);
+  return center / 4 + sides / 8 + corners / 16;
+}
+
+Noise.prototype.linear_interpolate = function(a, b, x) {
+  return a * (1 - x) + b * x;
+}
+
+Noise.prototype.cosine_interpolate = function(a, b, x) {
+  var f = (1 - Math.cos(x * Math.PI)) / 2;
+  return a * (1 - f) + b * f;
+}
+
+Noise.prototype.interpolate_noise = function(x) {
+  var xi = Math.floor(x);
+  return this.linear_interpolate(this.smooth_noise(xi), this.smooth_noise(xi + 1), x - xi);
+}
+
+Noise.prototype.interpolate_noise_2d = function(x, y){
+  var xi = Math.floor(x);
+  var yi = Math.floor(y);
+  var a = this.linear_interpolate(this.smooth_noise_2d(xi, yi), this.smooth_noise_2d(xi+1, yi), x - xi);
+  var b = this.linear_interpolate(this.smooth_noise_2d(xi, yi+1), this.smooth_noise_2d(xi+1, yi+1), x - xi);
+  return this.linear_interpolate(a, b, y - yi);
+}
+
+Noise.prototype.perlin_noise = function(x) {
+  var total = 0;
+  for (var i = 0; i < this.octaves; i++) {
+    var frequency = Math.pow(2, i);
+    var amplitude = Math.pow(this.persistence, i);
+    total += this.interpolate_noise(x * frequency) * amplitude;
+  }
+  return total;
+}
+
+Noise.prototype.perlin_noise_2d = function(x, y) {
+  var total = 0;
+  for (var i = 0; i < this.octaves; i++) {
+    var frequency = Math.pow(2, i);
+    var amplitude = Math.pow(this.persistence, i);
+    total += this.interpolate_noise_2d(x * frequency, y + frequency) * amplitude;
+  }
+  return total;
+}
+</script>
+
+</body>
+</html>

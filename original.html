@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<title>Perlin noise</title>
+	<script type="text/javascript" src="js/phaser.min.js"></script>
+    <style type="text/css">
+        body {
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+
+<script type="text/javascript">
+
+var game = new Phaser.Game(800, 600, Phaser.AUTO, '', { preload: preload, create: create, update: update, render: render });
+
+function preload() {
+}
+
+function create() {
+  textureSize = 600;
+  gridSize = 3;
+  indent = 10;
+  distance = 2;
+  var rng = new Phaser.RandomDataGenerator([1]);
+  var dustChance = new Phaser.RandomDataGenerator([2]);
+  var randomGrid = new Array();
+  for (var i = 0; i < gridSize + 1; i++) {
+    randomGrid.push(new Array());
+    for (var j = 0; j < gridSize + 1; j++) {
+      randomGrid[i].push([rng.realInRange(-1, 1), rng.realInRange(-1, 1)]);
+    }
+  }
+
+  bmd = game.add.bitmapData(textureSize, textureSize);
+  perlin = new PerlinNoise2D(textureSize, randomGrid);
+
+  for (var y = 0; y < textureSize; y+=distance) {
+    for (var x = 0; x < textureSize; x+=distance) {
+      var p = Math.abs(perlin.perlin(x, y, randomGrid));
+      var grey = 255 * p*2;
+      // Colour all pixels
+      bmd.setPixel(x, y, grey, grey, grey, false);
+    }
+  }
+  // Force image update
+  bmd.context.putImageData(bmd.imageData, 0, 0);
+  bmd.dirty = true;
+  game.cache.addBitmapData('perlin', bmd);
+  game.add.sprite(indent, indent, game.cache.getBitmapData('perlin'));
+
+  console.log('done');
+}
+
+function update() {
+
+}
+
+function render() {
+
+}
+
+
+PerlinNoise2D = function(textureSize, randomGrid) {
+  this.randomGrid = randomGrid;
+  this.gridSize = randomGrid.length;
+  this.textureSize = textureSize;
+}
+
+// Linearly interpolate between a0 and a1
+// Weight w should be in the range [0.0, 1.0]
+PerlinNoise2D.prototype.lerp = function(a0, a1, w) {
+  return a0 + w * (a1 - a0);
+}
+
+// Compute the dot product of the distance and gradient vectors.
+// gradient vector comes from the random grid.
+PerlinNoise2D.prototype.dotGridGradient = function(x, y, ix, iy) {
+  var dx = x - ix;
+  var dy = y - iy;
+  return (dx * this.randomGrid[iy][ix][0]) + (dy * this.randomGrid[iy][ix][1]);
+}
+
+// Smooth over the transition between grids
+PerlinNoise2D.prototype.fade = function(t) {
+  return t * t * t * (t * (t * 6 - 15) + 10);
+}
+
+PerlinNoise2D.prototype.perlin = function(x, y, randomGrid) {
+  // find the grid co-ordinate that x and y are in
+  // e.g. if the texture is 500px wide, and the grid is 50 cells wide,
+  // divide each co-ordinate by 500 / 50 = 10. Therefore, (150, 150) is in
+  // cell (15, 15)
+
+  x = x / (textureSize / gridSize);
+  y = y / (textureSize / gridSize);
+
+  // Determine grid cell coordinates
+  // Convert floats into ints
+  var x0 = Math.floor(x);
+  var y0 = Math.floor(y);
+
+  // The bottom right of the grid cell
+  var x1 = x0 + 1;
+  var y1 = y0 + 1;
+
+  // Determine interpolation weights
+  var sx = x - x0;
+  var sy = y - y0;
+
+  // Top left
+  var n0 = this.dotGridGradient(x, y, x0, y0);
+  // Bottom left
+  var n1 = this.dotGridGradient(x, y, x1, y0);
+  // Left-hand side
+  var ix0 = this.lerp(n0, n1, this.fade(sx));
+  // Top right
+  var n0 = this.dotGridGradient(x, y, x0, y1);
+  // bottom right
+  var n1 = this.dotGridGradient(x, y, x1, y1);
+  // Right hand side
+  var ix1 = this.lerp(n0, n1, this.fade(sx));
+
+  // lerp between both sides
+  return this.lerp(ix0, ix1, this.fade(sy));
+}
+
+</script>
+
+</body>
+</html>
